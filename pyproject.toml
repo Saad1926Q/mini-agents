@@ -1,0 +1,10 @@
+[project]
+name = "mini-agents"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "dotenv>=0.9.9",
+    "openai>=2.15.0",
+]
