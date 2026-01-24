@@ -1,60 +1,59 @@
-import json
-
+from src._run_impl import (
+    NextStepFinalOutput,
+    NextStepHandoff,
+    NextStepRunAgain,
+    execute_single_step,
+)
 from src.agent import Agent
-from src.clients.openai import client
-from src.tool import execute_function
 
 DEFAULT_MAX_TURNS = 10
 
 
 class Runner:
-    async def run(self, agent: Agent, user_input: str, *, max_turns: int | None = None):
+    @classmethod
+    async def run(
+        cls,
+        agent: Agent,
+        user_input: str,
+        *,
+        max_turns: int | None = None,
+        display_logs: bool = False,
+    ):
+        current_agent = agent
         max_turns = max_turns if max_turns is not None else DEFAULT_MAX_TURNS
-
-        tool_schemas = [tool.json_schema for tool in agent.tools]
 
         model_input = [
             {"role": "system", "content": agent.instructions},
             {"role": "user", "content": user_input},
         ]
 
-        curr_turn = 0
+        for i in range(max_turns):
+            if display_logs:
+                print(f"[Turn {i + 1}/{max_turns}] Agent: {current_agent.name}")
 
-        while curr_turn < max_turns:
-            curr_turn += 1
+            tool_schemas = [tool.json_schema for tool in current_agent.tools]
 
-            response = client.responses.create(
-                model=agent.model,
-                tools=tool_schemas,
-                input=model_input,
+            result = await execute_single_step(
+                current_agent, tool_schemas, model_input, current_agent.handoffs
             )
 
-            model_input.extend(response.output)
+            if isinstance(result, NextStepFinalOutput):
+                if display_logs:
+                    print(f"[Turn {i + 1}] Final output received")
+                return result.output
+            elif isinstance(result, NextStepRunAgain):
+                if display_logs:
+                    print(f"[Turn {i + 1}] Continuing loop")
+                model_input.extend(result.output)
+            elif isinstance(result, NextStepHandoff):
+                if display_logs:
+                    print(
+                        f"[Turn {i + 1}] Handoff: {current_agent.name} -> {result.handoff_agent.name}"
+                    )
+                current_agent = result.handoff_agent
+                model_input[0]["content"] = (
+                    current_agent.instructions
+                )  # Replace the system prompt with the handoff agent's system prompt
+                model_input.extend(result.output)
 
-            called_tools = False
-
-            for output in response.output:
-                if output.type != "function_call":
-                    continue
-
-                print(output)
-
-                fn_name = output.name
-                args = json.loads(output.arguments)
-
-                for fn in agent.tools:
-                    if fn.json_schema.get("name") == fn_name:
-                        result = await execute_function(fn.tool_fn, args)
-                        result_json = json.dumps(result)
-                        model_input.append(
-                            {
-                                "type": "function_call_output",
-                                "call_id": output.call_id,
-                                "output": result_json,
-                            }
-                        )
-                        called_tools = True
-                        break
-
-            if called_tools is False:
-                return response.output_text
+        raise Exception(f"Max turns ({max_turns}) exceeded")

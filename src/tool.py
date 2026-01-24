@@ -1,5 +1,5 @@
 import inspect
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List
 
 
@@ -7,28 +7,21 @@ from typing import Any, Callable, Dict, List
 class Tool:
     tool_name: str
     tool_desc: str
-    tool_fn: Callable[..., Any]
-    json_schema: Dict[str, Any]
+    tool_fn: Callable[..., Any] | None = None
+    json_schema: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+        if self.json_schema == {}:
+            self.json_schema["name"] = self.tool_name
+            self.json_schema["parameters"] = {}
+            self.json_schema["type"] = "function"
+            self.json_schema["description"] = self.tool_desc
 
 
 async def execute_function(
     func: Callable[..., Any], func_params: Dict[str, Any]
 ) -> Any:
-    if inspect.iscoroutine(func):
+    if inspect.iscoroutinefunction(func):
         return await func(**func_params)
 
     return func(**func_params)
-
-
-def to_json_schema(callable: Callable) -> Dict[str, Any]:
-    positional_arguments: List[Any] = []
-    keyword_arguments: Dict[str, Any] = {}
-
-    sig: inspect.Signature = inspect.signature(callable)
-
-    for name, param in sig.parameters.items():
-        print(param.annotation)
-
-    # TODO: Implement a functionality to take a fn and automatically create a json schema
-
-    return {}

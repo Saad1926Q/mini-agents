@@ -22,20 +22,28 @@ time_tool = Tool(
     },
 )
 
+time_agent = Agent(
+    name="TimeKeeper",
+    model="gpt-4o-mini",
+    desc="Agent that can check the current time",
+    instructions="You are the TimeKeeper. You have access to the get_time tool. Use it to answer time-related questions.",
+    tools=[time_tool],
+)
+
 agent = Agent(
     name="Assistant",
     model="gpt-4o-mini",
     desc="General purpose agent",
-    instructions="You are a helpful, concise assistant that follows instructions carefully and uses tools when appropriate.",
-    tools=[time_tool],
+    instructions="You are a helpful assistant. If the user asks about the current time, hand off to the TimeKeeper agent.",
+    handoffs=[time_agent],
 )
-
-runner = Runner()
 
 
 async def main():
-    response = await runner.run(
-        agent=agent, user_input="What might be the time right now?"
+    response = await Runner.run(
+        agent=agent,
+        user_input="What time is it right now?",
+        display_logs=True,
     )
     print(response)
 
