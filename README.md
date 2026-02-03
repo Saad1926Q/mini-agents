@@ -25,19 +25,17 @@ To understand how things work at a lower level, I went through parts of the
 
 In this repository, I’m trying to implement some of the most fundamental building blocks of agent systems:
 
-- [ ] **Agent Loop**
-- [ ] **Tools**
-- [ ] **Guardrails**
-- [ ] **Handoffs**
+- [x] **Agent Loop**
+- [x] **Tools**
+- [x] **Handoffs**
 
 ## End Goal
 
 By the end, I want to have something that makes it easy to build **multi-agent architectures** without hiding important details.
 
 For example:
-- A system that can support **deep research–style workflows**
 - Multiple agents with clear responsibilities
-- Explicit handoffs 
+- Explicit handoffs
 
 ## Philosophy
 
