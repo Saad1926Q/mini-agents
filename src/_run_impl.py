@@ -1,7 +1,7 @@
 import json
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from openai import RateLimitError
 from openai.types.responses import Response
@@ -29,15 +29,23 @@ class NextStepHandoff:
     handoff_agent: Agent
 
 
-def is_handoff(handoffs: List[Agent], fn_name: str) -> bool:
+def get_handoff_agent(handoffs: List[Agent], fn_name: str) -> Agent | None:
+    if not fn_name.startswith("transfer_to_"):
+        return None
+
+    if len(fn_name.split("transfer_to_", 1)) <= 1:
+        return None
+
     handoff_agent_name = fn_name.split("transfer_to_", 1)[1]
 
-    return handoff_agent_name is not None and handoff_agent_name in [
-        handoff.name for handoff in handoffs
-    ]
+    for handoff in handoffs:
+        if handoff.name == handoff_agent_name:
+            return handoff
+
+    return None
 
 
-def _call_openai_with_retry(
+async def _call_openai_with_retry(
     agent: Agent,
     tool_schemas: List[Dict[str, Any]],
     model_input: List[Dict[str, Any]],
@@ -70,7 +78,7 @@ async def execute_single_step(
     model_input: List[Dict[str, Any]],
     handoffs: List[Agent],
 ) -> NextStepFinalOutput | NextStepRunAgain | NextStepHandoff:
-    response = _call_openai_with_retry(agent, tool_schemas, model_input)
+    response = await _call_openai_with_retry(agent, tool_schemas, model_input)
 
     outputs = list()
 
@@ -100,20 +108,14 @@ async def execute_single_step(
             called_tools = True
             continue  # skip to next tool call
 
-        if fn_name.startswith("transfer_to_") and is_handoff(handoffs, fn_name):
-            handoff_agent = None
-
-            for h in handoffs:
-                if h.name == fn_name.split("transfer_to_", 1)[1]:
-                    handoff_agent = h
-                    outputs.append(
-                        {
-                            "type": "function_call_output",
-                            "call_id": output.call_id,
-                            "output": f"Control transferred to {h.name}",
-                        }
-                    )
-                    break
+        if (handoff_agent := get_handoff_agent(handoffs, fn_name)) is not None:
+            outputs.append(
+                {
+                    "type": "function_call_output",
+                    "call_id": output.call_id,
+                    "output": f"Control transferred to {handoff_agent.name}",
+                }
+            )
 
             return NextStepHandoff(outputs, handoff_agent)
 
